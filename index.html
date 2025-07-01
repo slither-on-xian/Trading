@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>XIAN Trade Totals</title>
+  <title>$SSS Trading Leaderboard</title>
   <style>
     body {
       font-family: sans-serif;
@@ -21,27 +21,34 @@
     }
     th {
       background-color: #222;
+      color: #00f335;
     }
     tr:nth-child(even) {
       background-color: #1a1a1a;
     }
     h1 {
       color: #00f335;
+      font-size: 26px;
+    }
+    caption {
+      color: #aaa;
+      font-size: 14px;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>XIAN Trades — Totals per Signer</h1>
-  <p>From <strong>2025-06-28 00:00</strong> to <strong>2025-07-01 23:59</strong> (Pair 21)</p>
+  <h1>$SSS TRADING COMPETITION LEADERBOARD</h1>
+  <caption>From <strong>2025-06-28 00:00</strong> to <strong>2025-07-01 23:59</strong> (Pair 21)</caption>
 
   <table id="results">
     <tr>
       <th>Signer</th>
       <th>Trades</th>
       <th>SSS Sold</th>
-      <th>XIAN Sold</th>
-      <th>SSS Bought</th>
       <th>XIAN Bought</th>
+      <th>SSS Bought</th>
+      <th>XIAN Sold</th>
       <th>Total Volume</th>
     </tr>
   </table>
@@ -104,12 +111,10 @@
         totals[signer].xianBought+= parse(data.amount1Out);
       });
 
-      // Calculate total volume
       Object.values(totals).forEach(t => {
         t.totalVolume = t.sssSold + t.xianSold + t.sssBought + t.xianBought;
       });
 
-      // Sort by totalVolume descending
       const sorted = Object.entries(totals).sort((a, b) => b[1].totalVolume - a[1].totalVolume);
 
       const table = document.getElementById("results");
@@ -119,9 +124,9 @@
           <td>${signer}</td>
           <td>${stats.trades}</td>
           <td>${stats.sssSold.toFixed(4)}</td>
-          <td>${stats.xianSold.toFixed(4)}</td>
-          <td>${stats.sssBought.toFixed(4)}</td>
           <td>${stats.xianBought.toFixed(4)}</td>
+          <td>${stats.sssBought.toFixed(4)}</td>
+          <td>${stats.xianSold.toFixed(4)}</td>
           <td>${stats.totalVolume.toFixed(4)}</td>
         `;
         table.appendChild(tr);
