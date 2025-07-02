@@ -4,79 +4,28 @@
   <title>$SSS Daily Trader Volume</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px 40px;
-      background-color: #0d1f2d;
-      color: #00f5ff;
-      margin: 0;
-    }
-    .header-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    .logo {
-      height: 60px;
-      width: auto;
-    }
-    h2 {
-      color: #66ff00;
-      margin-top: 40px;
-      margin-bottom: 10px;
-      border-bottom: 2px solid #ff2ebf;
-      padding-bottom: 5px;
-      border-radius: 20px 20px 0 0;
-    }
-    .chart-container {
-      background-color: #111;
-      padding: 10px;
-      border-radius: 20px;
-      margin-bottom: 40px;
-      height: 400px; /* fixed container height */
-    }
-    .table-container {
-      background-color: #111;
-      padding: 20px;
-      border-radius: 20px;
-      margin-bottom: 40px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 1px;
-      border-radius: 20px;
-      overflow: hidden;
-    }
-    th, td {
-      border: 1px solid #050505;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background-color: #000;
-      color: #66ff00;
-    }
-    tr:nth-child(even) {
-      background-color: #111;
-    }
-    .chart-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-      border-radius: 20px;
-      display: block;
-    }
+    body { font-family: sans-serif; padding: 20px 40px; background-color: #0d1f2d; color: #00f5ff; margin: 0; }
+    h1, h2 { text-align: center; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .logo { height: 60px; width: auto; }
+    h2 { color: #66ff00; margin-top: 40px; margin-bottom: 10px; border-bottom: 2px solid #ff2ebf; padding-bottom: 5px; border-radius: 20px 20px 0 0; }
+    .chart-container { background-color: #111; padding: 10px; border-radius: 20px; margin-bottom: 40px; height: 450px; position: relative; }
+    .table-container { background-color: #111; padding: 20px; border-radius: 20px; margin-bottom: 40px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0; border-radius: 20px; overflow: hidden; }
+    th, td { border: 1px solid #050505; padding: 8px; text-align: left; }
+    th { background-color: #000; color: #66ff00; }
+    tr:nth-child(even) { background-color: #111; }
+    .chart-container canvas { width: 100% !important; height: 100% !important; border-radius: 20px; display: block; }
+    a.signer-link { color: #00f5ff; text-decoration: none; }
+    a.signer-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <header class="header-container">
-    <h1>$SSS TRADING LEADERBOARD — DAILY VOLUME (7 DAYS)</h1>
+    <h1>$SSS TRADING LEADERBOARD<br>DAILY VOLUME (7 DAYS)</h1>
     <img src="slither-logo.png" alt="Slither Logo" class="logo">
   </header>
-  <p>Top trader per day. Histogram shows top 5 by total volume.</p>
-
-  <h2>Volume Histogram</h2>
+  <h2>Top Volume by Trader - 7 Day</h2>
   <div class="chart-container">
     <canvas id="volumeChart"></canvas>
   </div>
@@ -84,114 +33,86 @@
   <h2>Daily Top Traders</h2>
   <div class="table-container">
     <table id="results">
-      <tr>
-        <th>Date</th>
-        <th>Signer</th>
-        <th>Trades</th>
-        <th>Total Volume</th>
-      </tr>
+      <tr><th>Date</th><th>Signer</th><th>Trades</th><th>Total Volume</th></tr>
     </table>
   </div>
 
   <script>
     (async () => {
+      // Date range
       const now = new Date();
-      const end = now.toISOString().split("T")[0] + "T23:59:59";
+      const end = `${now.toISOString().split('T')[0]}T23:59:59`;
       const startDate = new Date(now);
       startDate.setDate(now.getDate() - 6);
-      const start = startDate.toISOString().split("T")[0] + "T00:00:00";
+      const start = `${startDate.toISOString().split('T')[0]}T00:00:00`;
 
-      const query = `
-      query {
-        allEvents(
-          condition: { contract: \"con_pairs\", event: \"Swap\" }
-          filter: {
-            dataIndexed: { contains: { pair: \"21\" } }
-            created: {
-              greaterThanOrEqualTo: \"${start}\"
-              lessThanOrEqualTo: \"${end}\"
-            }
-          }
-          orderBy: CREATED_ASC
-          first: 1000
-        ) {
-          edges {
-            node {
-              created
-              signer
-              data
-            }
-          }
+      // Fetch swap events
+      const query = `query { allEvents(condition:{contract:\"con_pairs\",event:\"Swap\"} filter:{dataIndexed:{contains:{pair:\"21\"}},created:{greaterThanOrEqualTo:\"${start}\",lessThanOrEqualTo:\"${end}\"}} orderBy:CREATED_ASC first:1000){edges{node{created signer data}}}}`;
+      const res = await fetch('https://node.xian.org/graphql', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query}) });
+      const trades = (await res.json()).data.allEvents.edges.map(e => e.node);
+
+      // Aggregate totals
+      const dailyTotals = {}, totalPerSigner = {};
+      trades.forEach(t => {
+        const dateKey = t.created.split('T')[0];
+        const num = v => Number(v) || 0;
+        const vol = num(t.data.amount0In) + num(t.data.amount1In) + num(t.data.amount0Out) + num(t.data.amount1Out);
+        // Table data
+        dailyTotals[dateKey] = dailyTotals[dateKey] || {};
+        dailyTotals[dateKey][t.signer] = dailyTotals[dateKey][t.signer] || { trades: 0, volume: 0 };
+        dailyTotals[dateKey][t.signer].trades++;
+        dailyTotals[dateKey][t.signer].volume += vol;
+        // Histogram data
+        totalPerSigner[t.signer] = (totalPerSigner[t.signer] || 0) + vol;
+      });
+
+      // Populate table with top trader per day over last 7 days
+      const table = document.getElementById('results');
+      // generate last 7 days dates (newest first)
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
+        days.push(d.toISOString().split('T')[0]);
+      }
+      days.forEach(date => {
+        const entries = dailyTotals[date] ? Object.entries(dailyTotals[date]).sort(([,a],[,b]) => b.volume - a.volume) : [];
+        const tr = document.createElement('tr');
+        tr.style.borderTop = '4px solid #ff2ebf';
+        if (entries.length) {
+          const [signer, stats] = entries[0];
+          tr.innerHTML = `
+            <td>${date}</td>
+            <td><a href="https://explorer.xian.org/addresses/${signer}" target="_blank" class="signer-link">${signer}</a></td>
+            <td>${stats.trades}</td>
+            <td>${stats.volume.toFixed(2)}</td>
+          `;
+        } else {
+          tr.innerHTML = `
+            <td>${date}</td>
+            <td>-</td>
+            <td>0</td>
+            <td>0.00</td>
+          `;
         }
-      }`;
-
-      const res = await fetch("https://node.xian.org/graphql", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query })
-      });
-      const json = await res.json();
-      const trades = json.data.allEvents.edges.map(edge => edge.node);
-
-      const dailyTotals = {};
-      const totalPerSigner = {};
-
-      trades.forEach(trade => {
-        const date = trade.created.split("T")[0];
-        const signer = trade.signer;
-        const d = trade.data;
-        const parse = v => parseFloat(v) || 0;
-        const volume = parse(d.amount0In) + parse(d.amount1In) + parse(d.amount0Out) + parse(d.amount1Out);
-
-        if (!dailyTotals[date]) dailyTotals[date] = {};
-        const dt = dailyTotals[date];
-        if (!dt[signer]) dt[signer] = { trades: 0, volume: 0 };
-        dt[signer].trades += 1;
-        dt[signer].volume += volume;
-
-        totalPerSigner[signer] = (totalPerSigner[signer] || 0) + volume;
+        table.appendChild(tr);
       });
 
-      const table = document.getElementById("results");
-      Object.keys(dailyTotals)
-        .sort((a, b) => b.localeCompare(a))
-        .forEach(date => {
-          const entries = Object.entries(dailyTotals[date]);
-          if (entries.length) {
-            const [topSigner, stats] = entries.reduce((max, current) => current[1].volume > max[1].volume ? current : max);
-            const tr = document.createElement("tr");
-            tr.style.borderTop = "4px solid #ff2ebf";
-            tr.innerHTML = `
-              <td>${date}</td>
-              <td>${topSigner}</td>
-              <td>${stats.trades}</td>
-              <td>${stats.volume.toFixed(2)}</td>
-            `;
-            table.appendChild(tr);
-          }
-        });
-
-      const top5 = Object.entries(totalPerSigner)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-      const ctx = document.getElementById("volumeChart").getContext("2d");
-      new Chart(ctx, {
-        type: "bar",
+      // Render volume histogram
+      const top5 = Object.entries(totalPerSigner).sort(([,a],[,b]) => b - a).slice(0, 7);
+      new Chart(document.getElementById('volumeChart').getContext('2d'), {
+        type: 'bar',
         data: {
-          labels: top5.map(([s]) => s.slice(0,10) + "..."),
-          datasets: [{
-            label: "Total Volume (7d)",
-            data: top5.map(([,v]) => v),
-            backgroundColor: "#00ff55"
-          }]
+          labels: top5.map(e => e[0].slice(0, 10) + '...'),
+          datasets: [{ data: top5.map(e => e[1]), backgroundColor: '#00ff55' }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { ticks: { color: "#00f5ff" }, title: { display: true, text: "Signer" } },
-            y: { ticks: { color: "#00f5ff" }, title: { display: true, text: "Volume" } }
+            x: { ticks: { color: '#00f5ff' } },
+            y: { ticks: { color: '#00f5ff' } }
           }
         }
       });
