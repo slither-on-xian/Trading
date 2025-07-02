@@ -34,7 +34,7 @@
   <h2>Daily Top Traders</h2>
   <div class="table-container">
     <table id="results">
-      <tr><th>Date</th><th>Signer</th><th>Trades</th><th>Total Volume</th></tr>
+      <tr><th>Date</th><th>Signer</th><th>Trades</th><th>Net Positive Volume</th><th>Total $SSS Volume</th></tr>
     </table>
   </div>
 
@@ -52,19 +52,22 @@
       const res = await fetch('https://node.xian.org/graphql', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query}) });
       const trades = (await res.json()).data.allEvents.edges.map(e => e.node);
 
-      // Aggregate totals
-      const dailyTotals = {}, totalPerSigner = {};
+      // Aggregate totals: net positive and total SSS volume
+      const dailyTotals = {}, totalPerSignerNet = {};
       trades.forEach(t => {
         const dateKey = t.created.split('T')[0];
         const num = v => Number(v) || 0;
-        const vol = num(t.data.amount0In) + num(t.data.amount1In) + num(t.data.amount0Out) + num(t.data.amount1Out);
+        const netVol = num(t.data.amount0Out) - num(t.data.amount0In);
+        const totalSSS = num(t.data.amount0Out) + num(t.data.amount0In);
         // Table data
         dailyTotals[dateKey] = dailyTotals[dateKey] || {};
-        dailyTotals[dateKey][t.signer] = dailyTotals[dateKey][t.signer] || { trades: 0, volume: 0 };
-        dailyTotals[dateKey][t.signer].trades++;
-        dailyTotals[dateKey][t.signer].volume += vol;
-        // Histogram data
-        totalPerSigner[t.signer] = (totalPerSigner[t.signer] || 0) + vol;
+        dailyTotals[dateKey][t.signer] = dailyTotals[dateKey][t.signer] || { trades: 0, net: 0, totalSSS: 0 };
+        const stats = dailyTotals[dateKey][t.signer];
+        stats.trades++;
+        stats.net += netVol;
+        stats.totalSSS += totalSSS;
+        // Histogram data on net volume
+        totalPerSignerNet[t.signer] = (totalPerSignerNet[t.signer] || 0) + netVol;
       });
 
       // Populate table with top trader per day over last 7 days
@@ -76,52 +79,38 @@
         days.push(d.toISOString().split('T')[0]);
       }
       days.forEach(date => {
-        const entries = dailyTotals[date] ? Object.entries(dailyTotals[date]).sort(([,a],[,b]) => b.volume - a.volume) : [];
-        // create a tbody per day with separator
+        const entries = dailyTotals[date] ? Object.entries(dailyTotals[date]).sort(([,a],[,b]) => b.net - a.net) : [];
         const tbody = document.createElement('tbody');
         tbody.style.borderTop = '4px solid #ff2ebf';
-        tbody.style.display = 'table-row-group';
-        let tr;
         if (entries.length) {
           const [signer, stats] = entries[0];
-          const shortSigner = signer.slice(0, 10) + '...';
-          tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${date}</td>
-            <td><a href="https://explorer.xian.org/addresses/${signer}" target="_blank" class="signer-link">${shortSigner}</a></td>
-            <td>${stats.trades}</td>
-            <td>${stats.volume.toFixed(2)}</td>
-          `;
+          const short = signer.slice(0, 10) + '...';
+          tbody.innerHTML = `
+            <tr>
+              <td>${date}</td>
+              <td><a href="https://explorer.xian.org/addresses/${signer}" target="_blank" class="signer-link">${short}</a></td>
+              <td>${stats.trades}</td>
+              <td>${stats.net.toFixed(2)}</td>
+              <td>${stats.totalSSS.toFixed(2)}</td>
+            </tr>`;
         } else {
-          tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${date}</td>
-            <td>-</td>
-            <td>0</td>
-            <td>0.00</td>
-          `;
+          tbody.innerHTML = `
+            <tr>
+              <td>${date}</td>
+              <td>-</td>
+              <td>0</td>
+              <td>0.00</td>
+              <td>0.00</td>
+            </tr>`;
         }
-        tbody.appendChild(tr);
         table.appendChild(tbody);
       });
 
-      // Render volume histogram
-      const top7 = Object.entries(totalPerSigner).sort(([,a],[,b]) => b - a).slice(0, 7);
+      // Render volume histogram based on Net Positive Volume
+      const top7 = Object.entries(totalPerSignerNet).sort(([,a],[,b]) => b - a).slice(0, 7);
       new Chart(document.getElementById('volumeChart').getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels: top7.map(e => e[0].slice(0, 10) + '...'),
-          datasets: [{ data: top7.map(e => e[1]), backgroundColor: '#00ff55' }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: '#00f5ff' } },
-            y: { ticks: { color: '#00f5ff' } }
-          }
-        }
+        type: 'bar', data: { labels: top7.map(e => e[0].slice(0, 10) + '...'), datasets: [{ data: top7.map(e => e[1]), backgroundColor: '#00ff55' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#00f5ff' } }, y: { ticks: { color: '#00f5ff' } } } }
       });
     })();
   </script>
