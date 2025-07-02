@@ -6,7 +6,7 @@
   <style>
     body {
       font-family: sans-serif;
-      padding: 20px;
+      padding: 20px 40px; /* Increased horizontal padding */
       background-color: #0d1f2d; /* Deep Cyan Blue */
       color: #00f5ff; /* Bright Teal Glow */
       margin: 0;
@@ -48,13 +48,12 @@
 <body>
   <header class="header-container">
     <h1>$SSS TRADING LEADERBOARD — DAILY VOLUME (7 DAYS)</h1>
-    <!-- Place 'slither-logo.png' in the same directory -->
     <img src="slither-logo.png" alt="Slither Logo" class="logo">
   </header>
   <p>Top trader per day. Histogram shows top 5 by total volume.</p>
 
   <div>
-    <canvas id="volumeChart" height="200"></canvas>
+    <canvas id="volumeChart" height="100"></canvas>
   </div>
 
   <table id="results">
