@@ -6,9 +6,9 @@
   <style>
     body {
       font-family: sans-serif;
-      padding: 20px 40px; /* Increased horizontal padding */
-      background-color: #0d1f2d; /* Deep Cyan Blue */
-      color: #00f5ff; /* Bright Teal Glow */
+      padding: 20px 40px;
+      background-color: #0d1f2d;
+      color: #00f5ff;
       margin: 0;
     }
     .header-container {
@@ -21,27 +21,51 @@
       height: 60px;
       width: auto;
     }
+    h2 {
+      color: #66ff00;
+      margin-top: 40px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #ff2ebf;
+      padding-bottom: 5px;
+      border-radius: 20px 20px 0 0;
+    }
+    .chart-container {
+      background-color: #111;
+      padding: 10px;
+      border-radius: 20px;
+      margin-bottom: 40px;
+      height: 400px; /* fixed container height */
+    }
+    .table-container {
+      background-color: #111;
+      padding: 20px;
+      border-radius: 20px;
+      margin-bottom: 40px;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
-      margin-top: 20px;
+      margin-top: 1px;
+      border-radius: 20px;
+      overflow: hidden;
     }
     th, td {
-      border: 1px solid #050505; /* Black Shadow */
+      border: 1px solid #050505;
       padding: 8px;
       text-align: left;
     }
     th {
-      background-color: #000; /* Black */
-      color: #66ff00; /* Electric Lime */
+      background-color: #000;
+      color: #66ff00;
     }
     tr:nth-child(even) {
-      background-color: #111; /* Dark for even rows */
+      background-color: #111;
     }
-    canvas {
-      background-color: #000; /* Black background for chart */
-      margin-top: 30px;
-      border-radius: 8px;
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      border-radius: 20px;
+      display: block;
     }
   </style>
 </head>
@@ -52,29 +76,31 @@
   </header>
   <p>Top trader per day. Histogram shows top 5 by total volume.</p>
 
-  <div>
-    <canvas id="volumeChart" height="100"></canvas>
+  <h2>Volume Histogram</h2>
+  <div class="chart-container">
+    <canvas id="volumeChart"></canvas>
   </div>
 
-  <table id="results">
-    <tr>
-      <th>Date</th>
-      <th>Signer</th>
-      <th>Trades</th>
-      <th>Total Volume</th>
-    </tr>
-  </table>
+  <h2>Daily Top Traders</h2>
+  <div class="table-container">
+    <table id="results">
+      <tr>
+        <th>Date</th>
+        <th>Signer</th>
+        <th>Trades</th>
+        <th>Total Volume</th>
+      </tr>
+    </table>
+  </div>
 
   <script>
     (async () => {
-      // Compute date range for last 7 days
       const now = new Date();
       const end = now.toISOString().split("T")[0] + "T23:59:59";
       const startDate = new Date(now);
       startDate.setDate(now.getDate() - 6);
       const start = startDate.toISOString().split("T")[0] + "T00:00:00";
 
-      // GraphQL query
       const query = `
       query {
         allEvents(
@@ -99,7 +125,6 @@
         }
       }`;
 
-      // Fetch data
       const res = await fetch("https://node.xian.org/graphql", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,7 +133,6 @@
       const json = await res.json();
       const trades = json.data.allEvents.edges.map(edge => edge.node);
 
-      // Aggregate daily totals and overall totals
       const dailyTotals = {};
       const totalPerSigner = {};
 
@@ -128,7 +152,6 @@
         totalPerSigner[signer] = (totalPerSigner[signer] || 0) + volume;
       });
 
-      // Populate table: newest date first, only top trader per day
       const table = document.getElementById("results");
       Object.keys(dailyTotals)
         .sort((a, b) => b.localeCompare(a))
@@ -137,7 +160,7 @@
           if (entries.length) {
             const [topSigner, stats] = entries.reduce((max, current) => current[1].volume > max[1].volume ? current : max);
             const tr = document.createElement("tr");
-            tr.style.borderTop = "4px solid #ff2ebf"; // Pink border for new day
+            tr.style.borderTop = "4px solid #ff2ebf";
             tr.innerHTML = `
               <td>${date}</td>
               <td>${topSigner}</td>
@@ -148,7 +171,6 @@
           }
         });
 
-      // Chart top 5 overall
       const top5 = Object.entries(totalPerSigner)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5);
@@ -164,6 +186,8 @@
           }]
         },
         options: {
+          responsive: true,
+          maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
             x: { ticks: { color: "#00f5ff" }, title: { display: true, text: "Signer" } },
