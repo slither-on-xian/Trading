@@ -6,11 +6,11 @@
   <style>
     body { font-family: sans-serif; padding: 20px 40px; background-color: #0d1f2d; color: #00f5ff; margin: 0; }
     h1, h2 { text-align: center; }
-    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; max-width: 1000px; margin-left: auto; margin-right: auto; }
     .logo { height: 60px; width: auto; }
     h2 { color: #66ff00; margin-top: 40px; margin-bottom: 10px; border-bottom: 2px solid #ff2ebf; padding-bottom: 5px; border-radius: 20px 20px 0 0; }
-    .chart-container { background-color: #111; padding: 10px; border-radius: 20px; margin-bottom: 40px; height: 450px; position: relative; }
-    .table-container { background-color: #111; padding: 20px; border-radius: 20px; margin-bottom: 40px; }
+    .chart-container { background-color: #111; padding: 10px; border-radius: 20px; margin: 0 auto 40px auto; height: 450px; position: relative; max-width: 1000px; overflow: hidden; }
+    .table-container { background-color: #111; padding: 20px; border-radius: 20px; margin: 0 auto 40px auto; max-width: 1000px; overflow: hidden; }
     table { border-collapse: collapse; width: 100%; margin-top: 0; border-radius: 20px; overflow: hidden; }
     th, td { border: 1px solid #050505; padding: 8px; text-align: left; }
     th { background-color: #000; color: #66ff00; }
@@ -25,6 +25,7 @@
     <h1>$SSS TRADING LEADERBOARD<br>DAILY VOLUME (7 DAYS)</h1>
     <img src="slither-logo.png" alt="Slither Logo" class="logo">
   </header>
+
   <h2>Top Volume by Trader - 7 Day</h2>
   <div class="chart-container">
     <canvas id="volumeChart"></canvas>
@@ -68,7 +69,6 @@
 
       // Populate table with top trader per day over last 7 days
       const table = document.getElementById('results');
-      // generate last 7 days dates (newest first)
       const days = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date(startDate);
@@ -77,17 +77,23 @@
       }
       days.forEach(date => {
         const entries = dailyTotals[date] ? Object.entries(dailyTotals[date]).sort(([,a],[,b]) => b.volume - a.volume) : [];
-        const tr = document.createElement('tr');
-        tr.style.borderTop = '4px solid #ff2ebf';
+        // create a tbody per day with separator
+        const tbody = document.createElement('tbody');
+        tbody.style.borderTop = '4px solid #ff2ebf';
+        tbody.style.display = 'table-row-group';
+        let tr;
         if (entries.length) {
           const [signer, stats] = entries[0];
+          const shortSigner = signer.slice(0, 10) + '...';
+          tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${date}</td>
-            <td><a href="https://explorer.xian.org/addresses/${signer}" target="_blank" class="signer-link">${signer}</a></td>
+            <td><a href="https://explorer.xian.org/addresses/${signer}" target="_blank" class="signer-link">${shortSigner}</a></td>
             <td>${stats.trades}</td>
             <td>${stats.volume.toFixed(2)}</td>
           `;
         } else {
+          tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${date}</td>
             <td>-</td>
@@ -95,16 +101,17 @@
             <td>0.00</td>
           `;
         }
-        table.appendChild(tr);
+        tbody.appendChild(tr);
+        table.appendChild(tbody);
       });
 
       // Render volume histogram
-      const top5 = Object.entries(totalPerSigner).sort(([,a],[,b]) => b - a).slice(0, 7);
+      const top7 = Object.entries(totalPerSigner).sort(([,a],[,b]) => b - a).slice(0, 7);
       new Chart(document.getElementById('volumeChart').getContext('2d'), {
         type: 'bar',
         data: {
-          labels: top5.map(e => e[0].slice(0, 10) + '...'),
-          datasets: [{ data: top5.map(e => e[1]), backgroundColor: '#00ff55' }]
+          labels: top7.map(e => e[0].slice(0, 10) + '...'),
+          datasets: [{ data: top7.map(e => e[1]), backgroundColor: '#00ff55' }]
         },
         options: {
           responsive: true,
