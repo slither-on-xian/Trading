@@ -1,13 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>$SSS Trading Leaderboard</title>
+  <title>$SSS Daily Trader Volume</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: sans-serif;
       padding: 20px;
-      background-color: #111;
-      color: #eee;
+      background-color: #0d1f2d; /* Deep Cyan Blue */
+      color: #00f5ff; /* Bright Teal Glow */
+      margin: 0;
+    }
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .logo {
+      height: 60px;
+      width: auto;
     }
     table {
       border-collapse: collapse;
@@ -15,123 +27,152 @@
       margin-top: 20px;
     }
     th, td {
-      border: 1px solid #444;
+      border: 1px solid #050505; /* Black Shadow */
       padding: 8px;
       text-align: left;
     }
     th {
-      background-color: #222;
-      color: #00f335;
+      background-color: #000; /* Black */
+      color: #66ff00; /* Electric Lime */
     }
     tr:nth-child(even) {
-      background-color: #1a1a1a;
+      background-color: #111; /* Dark for even rows */
     }
-    h1 {
-      color: #00f335;
-      font-size: 26px;
-    }
-    caption {
-      color: #aaa;
-      font-size: 14px;
-      margin-bottom: 10px;
+    canvas {
+      background-color: #000; /* Black background for chart */
+      margin-top: 30px;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <h1>$SSS TRADING COMPETITION LEADERBOARD</h1>
-  <caption>From <strong>2025-06-28 00:00</strong> to <strong>2025-07-01 23:59</strong> (Pair 21)</caption>
+  <header class="header-container">
+    <h1>$SSS TRADING LEADERBOARD — DAILY VOLUME (7 DAYS)</h1>
+    <!-- Place 'slither-logo.png' in the same directory -->
+    <img src="slither-logo.png" alt="Slither Logo" class="logo">
+  </header>
+  <p>Top trader per day. Histogram shows top 5 by total volume.</p>
+
+  <div>
+    <canvas id="volumeChart" height="200"></canvas>
+  </div>
 
   <table id="results">
     <tr>
+      <th>Date</th>
       <th>Signer</th>
       <th>Trades</th>
-      <th>SSS Sold</th>
-      <th>XIAN Bought</th>
-      <th>SSS Bought</th>
-      <th>XIAN Sold</th>
       <th>Total Volume</th>
     </tr>
   </table>
 
   <script>
-    const query = `
-    query {
-      allEvents(
-        condition: { contract: "con_pairs", event: "Swap" }
-        filter: {
-          dataIndexed: { contains: { pair: "21" } }
-          created: {
-            greaterThanOrEqualTo: "2025-06-28T00:00:00"
-            lessThanOrEqualTo: "2025-07-01T23:59:59"
-          }
-        }
-        orderBy: CREATED_DESC
-        first: 1000
-      ) {
-        edges {
-          node {
-            created
-            signer
-            data
-          }
-        }
-      }
-    }`;
+    (async () => {
+      // Compute date range for last 7 days
+      const now = new Date();
+      const end = now.toISOString().split("T")[0] + "T23:59:59";
+      const startDate = new Date(now);
+      startDate.setDate(now.getDate() - 6);
+      const start = startDate.toISOString().split("T")[0] + "T00:00:00";
 
-    fetch("https://node.xian.org/graphql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query })
-    })
-    .then(res => res.json())
-    .then(res => {
-      const trades = res.data.allEvents.edges.map(edge => edge.node);
-      const totals = {};
+      // GraphQL query
+      const query = `
+      query {
+        allEvents(
+          condition: { contract: \"con_pairs\", event: \"Swap\" }
+          filter: {
+            dataIndexed: { contains: { pair: \"21\" } }
+            created: {
+              greaterThanOrEqualTo: \"${start}\"
+              lessThanOrEqualTo: \"${end}\"
+            }
+          }
+          orderBy: CREATED_ASC
+          first: 1000
+        ) {
+          edges {
+            node {
+              created
+              signer
+              data
+            }
+          }
+        }
+      }`;
+
+      // Fetch data
+      const res = await fetch("https://node.xian.org/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query })
+      });
+      const json = await res.json();
+      const trades = json.data.allEvents.edges.map(edge => edge.node);
+
+      // Aggregate daily totals and overall totals
+      const dailyTotals = {};
+      const totalPerSigner = {};
 
       trades.forEach(trade => {
+        const date = trade.created.split("T")[0];
         const signer = trade.signer;
-        const data = trade.data;
-        if (!totals[signer]) {
-          totals[signer] = {
-            trades: 0,
-            sssSold: 0,
-            xianSold: 0,
-            sssBought: 0,
-            xianBought: 0,
-            totalVolume: 0
-          };
-        }
+        const d = trade.data;
+        const parse = v => parseFloat(v) || 0;
+        const volume = parse(d.amount0In) + parse(d.amount1In) + parse(d.amount0Out) + parse(d.amount1Out);
 
-        const parse = v => parseFloat(v || "0");
+        if (!dailyTotals[date]) dailyTotals[date] = {};
+        const dt = dailyTotals[date];
+        if (!dt[signer]) dt[signer] = { trades: 0, volume: 0 };
+        dt[signer].trades += 1;
+        dt[signer].volume += volume;
 
-        totals[signer].trades += 1;
-        totals[signer].sssSold   += parse(data.amount0In);
-        totals[signer].xianSold  += parse(data.amount1In);
-        totals[signer].sssBought += parse(data.amount0Out);
-        totals[signer].xianBought+= parse(data.amount1Out);
+        totalPerSigner[signer] = (totalPerSigner[signer] || 0) + volume;
       });
 
-      Object.values(totals).forEach(t => {
-        t.totalVolume = t.sssSold + t.xianSold + t.sssBought + t.xianBought;
-      });
-
-      const sorted = Object.entries(totals).sort((a, b) => b[1].totalVolume - a[1].totalVolume);
-
+      // Populate table: newest date first, only top trader per day
       const table = document.getElementById("results");
-      sorted.forEach(([signer, stats]) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${signer}</td>
-          <td>${stats.trades}</td>
-          <td>${stats.sssSold.toFixed(4)}</td>
-          <td>${stats.xianBought.toFixed(4)}</td>
-          <td>${stats.sssBought.toFixed(4)}</td>
-          <td>${stats.xianSold.toFixed(4)}</td>
-          <td>${stats.totalVolume.toFixed(4)}</td>
-        `;
-        table.appendChild(tr);
+      Object.keys(dailyTotals)
+        .sort((a, b) => b.localeCompare(a))
+        .forEach(date => {
+          const entries = Object.entries(dailyTotals[date]);
+          if (entries.length) {
+            const [topSigner, stats] = entries.reduce((max, current) => current[1].volume > max[1].volume ? current : max);
+            const tr = document.createElement("tr");
+            tr.style.borderTop = "4px solid #ff2ebf"; // Pink border for new day
+            tr.innerHTML = `
+              <td>${date}</td>
+              <td>${topSigner}</td>
+              <td>${stats.trades}</td>
+              <td>${stats.volume.toFixed(2)}</td>
+            `;
+            table.appendChild(tr);
+          }
+        });
+
+      // Chart top 5 overall
+      const top5 = Object.entries(totalPerSigner)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+      const ctx = document.getElementById("volumeChart").getContext("2d");
+      new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: top5.map(([s]) => s.slice(0,10) + "..."),
+          datasets: [{
+            label: "Total Volume (7d)",
+            data: top5.map(([,v]) => v),
+            backgroundColor: "#00ff55"
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#00f5ff" }, title: { display: true, text: "Signer" } },
+            y: { ticks: { color: "#00f5ff" }, title: { display: true, text: "Volume" } }
+          }
+        }
       });
-    });
+    })();
   </script>
 </body>
 </html>
